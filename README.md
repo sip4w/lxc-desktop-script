@@ -1,179 +1,85 @@
 ## Overview
 <img width="500" height="450" alt="image" src="https://github.com/user-attachments/assets/b3a550d6-151c-4643-8ada-6e6ec76b01f6" />
 
-This script automates the setup of a complete GUI environment within an existing Proxmox LXC container. It installs KDE Plasma desktop, XRDP for remote desktop access, VNC servers, and configures GPU support with ROCm drivers. The script is designed for Ubuntu 24.04 and includes comprehensive error handling and rollback capabilities.
+# LXC GUI Setup Script (v1.1)
 
-## System Requirements
+Briefly: this script automates installing a GUI environment in an existing Ubuntu 24.04 LXC container. It installs Xorg, KDE Plasma, XRDP, configures a headless Xorg and a user Plasma session, adds ROCm utilities for AMD GPUs, and provides templates for VNC and V2RayA services.
 
-- **Operating System**: Ubuntu 24.04
-- **Architecture**: amd64 (x86_64)
-- **LXC Container**: Existing privileged LXC container
-- **GPU Support**: AMD GPUs (optional, with ROCm)
-- **Network**: Internet connection for package downloads
+## Host and Proxmox configuration
+- **Host**: Proxmox VE
+- **Container config**: `/etc/pve/nodes/pve/lxc/456.conf`
+- **Key parameters**:
+  - **unprivileged**: 1 (unprivileged container)
+  - **features**: `fuse=1,keyctl=1,nesting=1`
+  - **GPU/devices inside the container**:
+    - `/dev/dri/card0` (gid=44, video), `/dev/dri/renderD128` (gid=993, render)
+    - `/dev/kfd` (gid=993) — for ROCm
+    - `/dev/kvm` — passed through (if required)
+  - **Network**: `net0` → `bridge=vmbr1`, `ip=dhcp`, `firewall=1`
+  - **Resources**: `memory=7512`, `rootfs=20G`, `swap=512`
+  - **Other**: `tun` mounted; extra `cgroup2.devices.allow` rules for required char devices
 
-## Main Components Installed
-
-### Desktop Environment
-- **KDE Plasma Desktop** - Complete desktop environment
-- **SDDM** - Display manager for KDE
-- **KDE Frameworks** - Essential KDE libraries and components
-
-### Xorg Display Server
-- **Xorg Core** - Display server with hardware acceleration
-- **Video Drivers**: AMDGPU, Intel, NVIDIA, VMware, QXL, VirtualBox
-- **Input Drivers**: libinput, wacom, keyboard, mouse
-
-### Remote Desktop Solutions
-- **XRDP** - Microsoft RDP protocol server
-- **X11VNC** - VNC server for X11 sessions
-- **TigerVNC** - Enhanced VNC implementation
-- **NoMachine** - High-performance remote desktop (auto-downloaded latest version)
-
-### GPU Support (ROCm)
-- **ROCm System Management Interface** (`rocm-smi`)
-- **ROCm Info Tool** (`rocminfo`)
-- **AMD HIP Runtime** (`libamdhip64-5`)
-- **Mesa Vulkan Drivers**
-- **AMDGPU Top** - Real-time GPU monitoring tool (Rust-based)
-
-### Networking
-- **NetworkManager** - Network configuration management
-- **systemd-networkd** - Fallback network configuration
-- **V2RayA** - VPN/proxy client with web interface
-
-### Additional Tools
-- **Chromium Browser** - Web browser with GPU acceleration
-- **DBus-X11** - X11 session management
-- **Zenity** - GTK dialog boxes for scripts
-- **Development Tools**: curl, wget, git, vim, htop, sudo
-
-## User Configuration
-
-### Default User
-- **Username**: `sip`
-- **Password**: `sip`
-- **Groups**: sudo, video, render (for GPU access)
-- **Permissions**: Passwordless sudo access
-
-## Services Configured
-
-### Systemd Services
-- `xorg-headless.service` - Headless Xorg server on VT11
-- `plasma-headless@sip.service` - KDE Plasma session for user sip
-- `xrdp.service` - RDP server
-- `xrdp-sesman.service` - RDP session manager
-- `x11vnc@sip.service` - Alternative VNC server
-- `v2raya.service` - V2RayA VPN client
-- `NetworkManager.service` - Network management
-
-### Xorg Configuration
-- **Resolution**: 1920x1080 @ 60Hz
-- **GPU Driver**: AMDGPU with TearFree option
-- **Monitor**: Headless configuration
-- **AccelMethod**: glamor (hardware acceleration)
-
-## Network Configuration
-
-### Primary Setup
-- **NetworkManager** - Manages network connections
-- **DHCP** - Automatic IP address assignment
-- **Connection**: "Wired Network" for eth0 interface
-
-### Fallback Configuration
-- **systemd-networkd** - Alternative network management
-- **Configuration File**: `/etc/systemd/network/10-eth0.network`
-
-## GPU Monitoring
-
-### AMDGPU Top
-- **Installation**: Via Cargo/Rust toolchain
-- **Features**:
-  - Real-time GPU usage monitoring
-  - Temperature and power consumption
-  - Memory usage statistics
-  - JSON output support for scripting
-
-### ROCm Tools
-- **rocm-smi**: System management interface
-- **rocminfo**: GPU information display
-
-## Remote Access Options
-
-### RDP (Port 3389)
-- **Server**: XRDP with XorgXRDP backend
-- **Resolution**: Configurable, default 1920x1080
-- **Authentication**: Username/password
-- **Client**: Any RDP client (Remmina, Windows RDP, etc.)
-
-### NoMachine
-- **Protocol**: NX technology for better performance
-- **Installation**: Automatic download of latest version
-- **Architecture**: Auto-detection (amd64/arm64)
-- **Configuration**: Optimized for LXC environment
-
-## Usage Instructions
-
-### Running the Script
-```bash
-chmod +x setup_lxc_gui_v1.1.sh
-./setup_lxc_gui_v1.1.sh
+Example snippet:
+```ini
+unprivileged: 1
+features: fuse=1,keyctl=1,nesting=1
+dev2: /dev/dri/card0,gid=44,mode=0660
+dev3: /dev/dri/renderD128,gid=993,mode=0660
+dev4: /dev/kfd,gid=993,mode=0660
+lxc.cgroup2.devices.allow: c 10:200 rwm
+lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file
+lxc.mount.entry: /dev/shm dev/shm none bind,create=dir,optional
+net0: name=eth0,bridge=vmbr1,firewall=1,ip=dhcp,type=veth
 ```
 
-### Post-Installation Steps
-1. **Restart Container**: Required for GPU access
-   ```bash
-   pct stop <container_id> && pct start <container_id>
-   ```
+> Note: inside the container, user `sip` is added to `video` and `render` groups which match the passed GPU devices.
 
-2. **Connect via RDP**:
-   - **Host**: Container IP address
-   - **Port**: 3389
-   - **Username**: sip
-   - **Password**: sip
+## Notes
+- The script targets AMD GPUs (ROCm). If no GPU is available, Xorg may fail with the `amdgpu` driver. In that case, use the dummy/vesa driver or configure device passthrough properly.
+- The hint `pct stop 456 && pct start 456` is an example; use your actual container ID.
 
-3. **Monitor GPU**:
-   ```bash
-   amdgpu_top          # Interactive monitoring
-   rocminfo           # GPU information
-   rocm-smi           # System management
-   ```
 
-### Service Management
+## Features
+- Headless Xorg (+ custom `xorg.conf.d/10-headless-amdgpu.conf`, 1920x1080, `amdgpu` driver)
+- KDE Plasma (X11) as a system service `plasma-headless@<user>`
+- RDP access via XRDP (port 3389)
+- x11vnc service template (`x11vnc@.service`)
+- ROCm tools: `rocm-smi`, `rocminfo`, `libamdhip64-*`; builds `amdgpu_top`
+- NoMachine .deb downloader (install only; service start/config commented out)
+
+## Requirements
+- Ubuntu 24.04 inside LXC (unprivileged container)
+- Internet connectivity
+- systemd inside the container
+- For GPU: `/dev/dri/*` passthrough (AMD), proper cgroup rules, and access to `video` and `render` groups
+
+## Quick start
+1) Run as `root` inside the container:
 ```bash
-# Check status
-systemctl status plasma-headless@sip
-systemctl status xrdp
-
-# View logs
-journalctl -u plasma-headless@sip -f
-journalctl -u xrdp -f
+bash /root/setup_lxc_gui_v1.1.sh
 ```
+2) Reboot the container when the script finishes.
+
+## RDP access
+- Host: container IP
+- Port: 3389
+- User: `sip`
+- Password: `sip`
+
+## Important (security and caveats)
+- Change the `sip` user password immediately and preferably remove `NOPASSWD:ALL` from `/etc/sudoers.d/sip`.
+- Xorg starts with `-ac` (no access control); restrict network access via firewall.
+- `chromium-browser` may require snap: install `snapd && snap install chromium` or use `apt install -y firefox`.
 
 ## Troubleshooting
+```bash
+systemctl status xorg-headless
+systemctl status plasma-headless@sip
+systemctl status xrdp xrdp-sesman
+journalctl -u plasma-headless@sip -f
+rocminfo
+amdgpu_top
+```
 
-### Common Issues
-1. **GPU Not Detected**: Restart container after installation
-2. **Network Issues**: Check NetworkManager vs systemd-networkd conflicts
-3. **Display Problems**: Verify Xorg configuration in `/etc/X11/xorg.conf.d/`
-4. **Service Failures**: Check logs with `journalctl -u <service_name>`
 
-## Security Considerations
 
-- **Default Password**: Change `sip:sip` after setup
-- **VNC Access**: Configure passwords for VNC servers
-- **Firewall**: Configure iptables for remote access ports
-- **User Permissions**: Review sudo access for production use
-
-## Dependencies
-
-### Build Tools
-- **Cargo/Rust**: For AMDGPU top compilation
-- **Build Essentials**: GCC, make, etc.
-
-### Runtime Dependencies
-- **X11 Libraries**: For GUI applications
-- **Qt5/KF5**: KDE framework dependencies
-- **Vulkan/Mesa**: GPU acceleration
-- **PipeWire**: Audio/video streaming
-
-This script provides a complete, beta GUI environment for LXC containers with comprehensive remote access options and GPU support.
