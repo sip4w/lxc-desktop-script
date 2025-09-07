@@ -1,5 +1,3 @@
-# setup_lxc_gui_v1.1_final.sh - LXC GUI Setup Script
-
 ## Overview
 
 This script automates the setup of a complete GUI environment within an existing LXC container. It installs KDE Plasma desktop, XRDP for remote desktop access, VNC servers, and configures GPU support with ROCm drivers. The script is designed for Ubuntu 24.04 and includes comprehensive error handling and rollback capabilities.
