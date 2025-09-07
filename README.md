@@ -1,4 +1,5 @@
 ## Overview
+<img width="778" height="660" alt="Screenshot 2025-09-07 163001" src="https://github.com/user-attachments/assets/1779b63f-777e-4f9d-bc31-269c5a59e1ef" />
 
 This script automates the setup of a complete GUI environment within an existing LXC container. It installs KDE Plasma desktop, XRDP for remote desktop access, VNC servers, and configures GPU support with ROCm drivers. The script is designed for Ubuntu 24.04 and includes comprehensive error handling and rollback capabilities.
 
