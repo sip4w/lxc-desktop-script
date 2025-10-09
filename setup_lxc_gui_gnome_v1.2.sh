@@ -68,9 +68,6 @@ apt install -y \
 
 echo "🖥️  STEP 1.4: Installing Ubuntu GNOME Desktop..."
 apt install -y \
-    ubuntu-desktop \
-    ubuntu-desktop-minimal \
-    ubuntu-gnome-desktop \
     gdm3 \
     gnome-session \
     gnome-shell \
