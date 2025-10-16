@@ -3,7 +3,7 @@
 
 # LXC GUI Setup Script
 
-Briefly: this script automates installing a GUI environment in an existing Ubuntu 24.04 LXC container. It installs Xorg, KDE Plasma, XRDP, configures a headless Xorg and a user Plasma session, adds ROCm utilities for AMD GPUs.
+Briefly: this script automates installing a GUI environment in an existing Ubuntu 24.04 LXC container. It installs Xorg, KDE Plasma ,Gnome, XRDP*, configures a headless Xorg and a user Plasma session, adds ROCm utilities for AMD GPUs Beelink ser8 8845.
 
 ## Host and Proxmox configuration
 - **Host**: Proxmox VE
@@ -27,8 +27,6 @@ dev2: /dev/dri/card0,gid=44,mode=0660
 dev3: /dev/dri/renderD128,gid=993,mode=0660
 dev4: /dev/kfd,gid=993,mode=0660
 lxc.cgroup2.devices.allow: c 10:200 rwm
-lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file
-lxc.mount.entry: /dev/shm dev/shm none bind,create=dir,optional
 net0: name=eth0,bridge=vmbr1,firewall=1,ip=dhcp,type=veth
 ```
 
@@ -55,7 +53,7 @@ net0: name=eth0,bridge=vmbr1,firewall=1,ip=dhcp,type=veth
 ## Quick start
 1) Run as `root` inside the container:
 ```bash
-bash /root/setup_lxc_gui_v1.1.sh
+bash /root/setup_lxc_gui.sh
 ```
 2) Reboot the container when the script finishes.
 
