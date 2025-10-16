@@ -83,7 +83,7 @@ bash /root/setup_lxc_gui.sh
 ```
 2) Reboot the container when the script finishes.
 
-## RDP access
+## RDP access* dont work(
 - Host: container IP
 - Port: 3389
 - User: `sip`
