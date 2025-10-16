@@ -1,7 +1,7 @@
 ## Overview
 <img width="500" height="450" alt="image" src="https://github.com/user-attachments/assets/b3a550d6-151c-4643-8ada-6e6ec76b01f6" />
 
-# LXC GUI Setup Script (v1.1)
+# LXC GUI Setup Script
 
 Briefly: this script automates installing a GUI environment in an existing Ubuntu 24.04 LXC container. It installs Xorg, KDE Plasma, XRDP, configures a headless Xorg and a user Plasma session, adds ROCm utilities for AMD GPUs.
 
@@ -43,7 +43,6 @@ net0: name=eth0,bridge=vmbr1,firewall=1,ip=dhcp,type=veth
 - Headless Xorg (+ custom `xorg.conf.d/10-headless-amdgpu.conf`, 1920x1080, `amdgpu` driver)
 - KDE Plasma (X11) as a system service `plasma-headless@<user>`
 - RDP access via XRDP (port 3389)
-- x11vnc service template (`x11vnc@.service`)
 - ROCm tools: `rocm-smi`, `rocminfo`, `libamdhip64-*`; builds `amdgpu_top`
 - NoMachine .deb downloader (install only; service start/config commented out)
 
