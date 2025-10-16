@@ -8,26 +8,52 @@ Briefly: this script automates installing a GUI environment in an existing Ubunt
 ## Host and Proxmox configuration
 - **Host**: Proxmox VE
 - **Container config**: `/etc/pve/nodes/pve/lxc/456.conf`
-- **Key parameters**:
-  - **unprivileged**: 1 (unprivileged container)
-  - **features**: `fuse=1,keyctl=1,nesting=1`
+- **Key parameters (with brief description)**:
+  - **unprivileged**: 1 — the container runs in unprivileged mode (more secure)
+  - **features**: `fuse=1,keyctl=1,nesting=1` — enables FUSE, keyctl, and nested containers
   - **GPU/devices inside the container**:
-    - `/dev/dri/card0` (gid=44, video), `/dev/dri/renderD128` (gid=993, render)
-    - `/dev/kfd` (gid=993) — for ROCm
-    - `/dev/kvm` — passed through (if required)
-  - **Network**: `net0` → `bridge=vmbr1`, `ip=dhcp`, `firewall=1`
-  - **Resources**: `memory=7512`, `rootfs=20G`, `swap=512`
-  - **Other**: `tun` mounted; extra `cgroup2.devices.allow` rules for required char devices
+    - `/dev/dri/card0` (gid=44, video), `/dev/dri/renderD128` (gid=993, render) — video devices for GPU access
+    - `/dev/kfd` (gid=993) — required for ROCm support (AMD GPU compute)
+    - `/dev/kvm` — emulated/passed-through KVM (for virtualization, if needed)
+  - **Network**: `net0` → `bridge=vmbr1`, `ip=dhcp`, `firewall=1` — network adapter, bridge, DHCP, firewall enabled
+  - **Resources**: `memory=7512`, `rootfs=20G`, `swap=512` — allocated RAM, disk size, swap
+  - **Other**: `tun` is mounted; extra `cgroup2.devices.allow` rules for required char devices
 
-Example snippet:
+Example config with comments:
 ```ini
-unprivileged: 1
-features: fuse=1,keyctl=1,nesting=1
-dev2: /dev/dri/card0,gid=44,mode=0660
-dev3: /dev/dri/renderD128,gid=993,mode=0660
-dev4: /dev/kfd,gid=993,mode=0660
-lxc.cgroup2.devices.allow: c 10:200 rwm
-net0: name=eth0,bridge=vmbr1,firewall=1,ip=dhcp,type=veth
+arch: amd64                         # Container architecture
+dev0: /dev/fuse,gid=0,mode=0660     # FUSE for user filesystems
+dev1: /dev/kvm,gid=10,mode=0666     # KVM for hardware virtualization
+dev2: /dev/dri/card1,gid=44,mode=0660   # GPU device for rendering/output
+dev3: /dev/dri/renderD128,gid=993,mode=0660 # DRM render device
+dev4: /dev/kfd,gid=993,mode=0660         # ROCm compute/GPU task queue
+dev5: /dev/net/tun,gid=0,mode=0660       # TUN interface (VPN, etc.)
+dev6: /dev/tty,gid=4,mode=0660           # Access to PTS/TTY
+dev7: /dev/tty0,gid=5,mode=0660          # TTY0 — main terminal
+dev8: /dev/tty7,gid=5,mode=0660          # TTY7 — usually Xorg/graphics
+dev9: /dev/fb0,gid=44,mode=0660          # Framebuffer device
+features: nesting=1,keyctl=1,mknod=1     # Nesting, keyctl, and mknod enabled
+hostname: testlxc                        # Hostname
+memory: 15512                            # RAM (MB)
+net0: name=eth0,bridge=vmbr1,hwaddr=BC:24:11:FE:A8:49,ip=dhcp,type=veth  # Network interface, bridge, DHCP
+ostype: ubuntu                           # OS type inside the container
+rootfs: local-lvm:vm-105-disk-0,size=20G # Container disk
+swap: 0                                  # Swap
+unprivileged: 1                          # Unprivileged mode
+lxc.prlimit.as: unlimited                # No limit on address space (AS); important for running large apps and workloads (e.g., video, ML)
+lxc.prlimit.core: unlimited              # No limit on core dumps — allows unlimited-size core dump files for debugging purposes
+lxc.prlimit.cpu: unlimited               # No limit on CPU time — process won't be killed on CPU time limit (good for long-running computations)
+lxc.prlimit.data: unlimited              # No limit on data segment size — for apps with large global/static data
+lxc.prlimit.fsize: unlimited             # No limit on file size (fsize); allows creating/writing files of any size (logs, dumps, data)
+lxc.prlimit.locks: unlimited             # No limit on number of file locks — important for DB or file sync workloads
+lxc.prlimit.memlock: unlimited           # No limit on amount of RAM that can be locked (memlock); important for RT, drivers, GPU (RDMA, CUDA, OpenCL)
+lxc.prlimit.msgqueue: unlimited          # No limit on POSIX message queue size; enables unrestricted IPC through message queues
+lxc.prlimit.nice: unlimited              # No limit on nice value — can change process priority arbitrarily (including negative priorities)
+lxc.prlimit.nproc: unlimited             # No limit on number of processes/threads (nproc); crucial for servers, compilers, renderfarms
+lxc.prlimit.rss: unlimited               # No limit on Resident Set Size (rss) — maximum physical memory for processes
+lxc.prlimit.rtprio: unlimited            # No limit on realtime priority — any RT priorities can be used (RT scheduling for professional audio/video)
+lxc.prlimit.sigpending: unlimited        # No limit on number of pending signals (sigpending) for a process/user; important for large system workloads
+lxc.prlimit.stack: unlimited             # No limit on process stack size; for programs needing deep recursion or large local variables
 ```
 
 > Note: inside the container, user `sip` is added to `video` and `render` groups which match the passed GPU devices.
