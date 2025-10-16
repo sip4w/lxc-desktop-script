@@ -21,6 +21,11 @@
 #
 # SCRIPT FOR SETTING UP GNOME GUI IN EXISTING LXC CONTAINER
 # Based on setup_lxc_gui_v1.2.sh
+# Решение первоначальной проблемы:
+# The original error "Steam needs to be online to update. Please confirm your network connection" was caused by:
+# Steam was trying to use IPv6 to download updates
+# IPv6 is not available in the container
+# After launching Steam directly (bypassing the bootstrap), the client was able to connect via IPv4
 # =======================================================================
 
 set -e  # Stop script on error
@@ -49,11 +54,9 @@ apt install -y \
     xserver-xorg-video-dummy \
     xserver-xorg-video-fbdev \
     xserver-xorg-video-intel \
-    xserver-xorg-video-nouveau \
     xserver-xorg-video-qxl \
     xserver-xorg-video-radeon \
     xserver-xorg-video-vesa \
-    xserver-xorg-video-vmware \
     xorg-docs-core \
     xorg-sgml-doctools
 
@@ -63,98 +66,13 @@ apt install -y \
     xorgxrdp \
     libpipewire-0.3-modules-xrdp \
     pipewire-module-xrdp \
-    python3-xkit \
-    tigervnc-xorg-extension
+    python3-xkit
 
 echo "🖥️  STEP 1.4: Installing Ubuntu GNOME Desktop..."
 apt install -y \
-    gdm3 \
-    gnome-session \
-    gnome-shell \
-    gnome-shell-extensions \
-    gnome-control-center \
-    gnome-settings-daemon \
+    ubuntu-gnome-desktop \
     gnome-tweaks \
-    gnome-software \
-    gnome-system-monitor \
-    gnome-terminal \
-    nautilus \
-    gedit \
-    eog \
-    evince \
-    totem \
-    rhythmbox \
-    gnome-calculator \
-    gnome-calendar \
-    gnome-clocks \
-    gnome-weather \
-    gnome-maps \
-    gnome-contacts \
-    shotwell \
-    gnome-music \
-    gnome-disk-utility \
-    gnome-logs \
-    gnome-characters \
-    gnome-font-viewer \
-    gnome-screenshot \
-    gnome-color-manager \
-    seahorse \
-    policykit-1-gnome \
-    network-manager-gnome \
-    pulseaudio \
-    pavucontrol \
-    gstreamer1.0-plugins-base \
-    gstreamer1.0-plugins-good \
-    gstreamer1.0-plugins-ugly \
-    gstreamer1.0-plugins-bad \
-    gstreamer1.0-libav \
-    ubuntu-restricted-addons \
-    fonts-noto \
-    fonts-noto-cjk \
-    fonts-noto-mono \
-    xfonts-base \
-    xfonts-75dpi \
-    xfonts-100dpi \
-    libgtk-3-dev \
-    libgtk2.0-dev \
-    libxss1 \
-    libnss3-dev \
-    libatk-bridge2.0-dev \
-    libdrm2 \
-    libxcomposite1 \
-    libxdamage1 \
-    libxrandr2 \
-    libgbm1 \
-    libxss1 \
-    libasound2-dev \
-    libpulse-dev \
-    locales-all \
-    language-pack-en \
-    language-pack-ru \
-    hunspell-en-us \
-    hunspell-ru \
-    aspell-en \
-    aspell-ru \
-    mythes-en-us \
-    mythes-ru \
-    libreoffice-style-breeze \
-    qt5-style-plugins \
-    qt5ct \
-    adwaita-qt \
-    breeze-gtk-theme \
-    breeze-icon-theme \
-    oxygen-icon-theme \
-    numix-icon-theme \
-    numix-gtk-theme \
-    papirus-icon-theme \
-    arc-theme \
-    materia-gtk-theme \
-    flatpak \
-    xdg-desktop-portal \
-    xdg-desktop-portal-gtk \
-    software-properties-gtk \
-    gnome-software-plugin-flatpak \
-    gnome-software-plugin-snap
+    gnome-shell-extensions
 
 
 echo "🔧 STEP 1.5: Installing additional packages..."
@@ -168,7 +86,6 @@ apt install -y \
     sudo \
     udev \
     tzdata \
-    x11vnc \
     dbus-x11 \
     zenity \
     snapd \
@@ -225,12 +142,24 @@ apt install -y steam-devices
 # =======================================================================
 
 echo "👤 STEP 2.1: Creating user..."
-useradd -m -s /bin/bash sip
-usermod -aG adm,audio,cdrom,dialout,xrdp,dip,fax,floppy,games,input,lp,plugdev,render,ssl-cert,sudo,tape,tty,video,voice sip
-echo 'sip:sip' | chpasswd
+user="sip"
+if ! id "$user" &>/dev/null; then
+    useradd -m -s /bin/bash $user
+    usermod -aG adm,audio,cdrom,dialout,xrdp,dip,fax,floppy,games,input,lp,plugdev,render,ssl-cert,sudo,tape,tty,video,voice,systemd-journal,systemd-network $user
+    echo "$user:$user" | chpasswd
+    echo "✅ User $user created successfully"
+else
+    echo "ℹ️  User $user already exists, skipping creation"
+fi
 
 echo "🔐 STEP 2.2: Configuring sudo..."
-echo 'sip ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/sip
+sudo_file="/etc/sudoers.d/$user"
+if [ ! -f "$sudo_file" ]; then
+    echo "$user ALL=(ALL) NOPASSWD:ALL" > "$sudo_file"
+    echo "✅ Sudo configuration created for $user"
+else
+    echo "ℹ️  Sudo configuration already exists for $user"
+fi
 
 # =======================================================================
 # STEP 3: CREATING CUSTOM SYSTEMD UNITS
@@ -262,95 +191,37 @@ RestartSec=3
 WantedBy=multi-user.target
 XORG_EOF
 
-#echo "🔧 STEP 3.2: Creating GNOME Headless service..."
-#cat > /etc/systemd/system/gnome-headless@.service << 'GNOME_EOF'
-#[Unit]
-#Description=GNOME Headless Session (%i)
-#After=network-online.target xorg-headless.service
-#Wants=network-online.target
-#Requires=xorg-headless.service
+echo "🔧 STEP 3.2: Creating GNOME Headless service..."
+cat > /etc/systemd/system/gnome-headless@.service << 'GNOME_EOF'
+[Unit]
+Description=GNOME Headless Session (%i)
+After=network-online.target xorg-headless.service
+Wants=network-online.target
+Requires=xorg-headless.service
 
-#[Service]
-#Type=simple
-#User=%i
-#Group=%i
-#PAMName=login
-#Environment=DISPLAY=:0
-#Environment=QT_QPA_PLATFORM=xcb
-#Environment=XDG_SESSION_TYPE=x11
-#Environment=GDMSESSION=gnome
-#Environment=GNOME_SHELL_SESSION_MODE=ubuntu
-#PermissionsStartOnly=true
+[Service]
+Type=simple
+User=%i
+Group=%i
+PAMName=login
+Environment=DISPLAY=:0
+Environment=QT_QPA_PLATFORM=xcb
+Environment=XDG_SESSION_TYPE=x11
+Environment=GDMSESSION=gnome
+Environment=GNOME_SHELL_SESSION_MODE=ubuntu
+PermissionsStartOnly=true
 
-#ExecStartPre=/bin/sh -c 'U=$(id -u %i); install -d -m700 -o %i -g %i /run/user/$U'
-#ExecStartPre=/bin/sh -lc 'for i in $(seq 1 100); do [ -S /tmp/.X11-unix/X0 ] && xdpyinfo -display :0 >/dev/null 2>&1 && exit 0; sleep 0.2; done; echo "X :0 not ready"; exit 1'
-#ExecStart=/bin/sh -lc 'U=$(id -u %i); export XDG_RUNTIME_DIR=/run/user/$U; exec dbus-run-session gnome-session'
+ExecStartPre=/bin/sh -c 'U=$(id -u %i); install -d -m700 -o %i -g %i /run/user/$U'
+ExecStartPre=/bin/sh -lc 'for i in $(seq 1 100); do [ -S /tmp/.X11-unix/X0 ] && xdpyinfo -display :0 >/dev/null 2>&1 && exit 0; sleep 0.2; done; echo "X :0 not ready"; exit 1'
+ExecStart=/bin/sh -lc 'U=$(id -u %i); export XDG_RUNTIME_DIR=/run/user/$U; exec dbus-run-session gnome-session'
 
-#Restart=on-failure
-#RestartSec=1
-#TimeoutStartSec=25
+Restart=on-failure
+RestartSec=1
+TimeoutStartSec=25
 
-#[Install]
-#WantedBy=multi-user.target
-#GNOME_EOF
-
-#echo "🔧 STEP 3.3: Creating drop-in configuration for GNOME..."
-#mkdir -p /etc/systemd/system/gnome-headless@.service.d
-#cat > /etc/systemd/system/gnome-headless@.service.d/env.conf << 'DROP_EOF'
-#[Service]
-#Environment=LOGIN_USER=%i
-#Environment=REMOTE_SESSION=nomachine
-#Environment=XDG_SESSION_TYPE=x11
-#Environment=GDMSESSION=gnome
-#DROP_EOF
-
-#####echo "🔧 STEP 3.4: Creating X0VNC service..."
-#cat > /etc/systemd/system/x0vnc@.service << 'X0VNC_EOF'
-#[Unit]
-#Description=X0VNC on :0 for user %i
-#After=xorg-headless.service
-#Requires=xorg-headless.service
-
-#[Service]
-#Type=simple
-#User=%i
-#Group=%i
-#Environment=DISPLAY=:0
-
-#ExecStartPre=/bin/sh -lc 'for i in $(seq 1 100); do [ -S /tmp/.X11-unix/X0 ] && xdpyinfo -display :0 >/dev/null 2>&1 && exit 0; sleep 0.2; done; echo "X :0 not ready"; exit 1'
-#ExecStart=/bin/sh -lc 'U=$(id -u %i); export XDG_RUNTIME_DIR=/run/user/$U; exec x0vncserver -display :0 -rfbport 5900 -localhost -NeverShared -AlwaysShared=0'
-
-#Restart=on-failure
-#RestartSec=2
-
-#[Install]
-#WantedBy=multi-user.target
-#X0VNC_EOF
-
-#echo "🔧 STEP 3.5: Creating X11VNC service..."
-#cat > /etc/systemd/system/x11vnc@.service << 'X11VNC_EOF'
-#[Unit]
-#Description=x11vnc on :0 (user %i)
-#After=xorg-headless.service
-#Requires=xorg-headless.service
-
-#[Service]
-#Type=simple
-#User=%i
-#Group=%i
-#Environment=DISPLAY=:0
-#PermissionsStartOnly=true
-
-#ExecStartPre=/bin/sh -lc 'U=$(id -u %i); install -d -m700 -o %i -g %i /run/user/$U'
-#ExecStartPre=/bin/sh -lc 'for i in $(seq 1 100); do [ -S /tmp/.X11-unix/X0 ] && xdpyinfo -display :0 >/dev/null 2>&1 && exit 0; sleep 0.2; done; echo "X :0 not ready"; exit 1'
-#ExecStartPre=/bin/sh -lc 'AUTH=$(ls -1t /root/.serverauth.* 2>/dev/null | head -n1 || true); if [ -n "$AUTH" ]; then sudo -u %i XAUTHORITY=/home/%i/.Xauthority xauth merge "$AUTH"; fi'
-#ExecStartPre=/bin/sh -lc 'test -f /home/%i/.vnc/passwd || ( install -d -m700 -o %i -g %i /home/%i/.vnc && echo "set a VNC password via: sudo -u %i x11vnc -storepasswd" >&2 )'
-#ExecStart=/usr/bin/x11vnc -display :0 -auth /home/%i/.Xauthority -rfbauth /home/%i/.vnc/passwd -rfbport 5900 -localhost -forever -shared -noxdamage
-
-#Restart=on-failure
-#RestartSec=1
-#X11VNC_EOF
-
+[Install]
+WantedBy=multi-user.target
+GNOME_EOF
 
 # =======================================================================
 # STEP 4: CREATING XORG CONFIGURATION
@@ -396,17 +267,17 @@ EndSection
 
 XORG_CONF_EOF
 
-sed -i 's|param=xrdp/xorg.conf|param=/etc/X11/xorg.conf.d/10-headless-amdgpu.conf|' /etc/xrdp/sesman.ini
+#sed -i 's|param=xrdp/xorg.conf|param=/etc/X11/xorg.conf.d/10-headless-amdgpu.conf|' /etc/xrdp/sesman.ini
 
 # =======================================================================
 # STEP 6: CONFIGURING AND STARTING SERVICES
 # =======================================================================
 
-#echo "⚙️  STEP 6.1: Reloading systemd..."
-#systemctl daemon-reload
+echo "⚙️  STEP 6.1: Reloading systemd..."
+systemctl daemon-reload
 
- echo "▶️  STEP 6.2: Enabling and starting services..."
- systemctl enable xorg-headless.service
+# echo "▶️  STEP 6.2: Enabling and starting services..."
+systemctl enable xorg-headless.service
 # systemctl enable xrdp.service
 # systemctl enable xrdp-sesman.service
 
@@ -415,40 +286,10 @@ sed -i 's|param=xrdp/xorg.conf|param=/etc/X11/xorg.conf.d/10-headless-amdgpu.con
 # systemctl start xrdp.service
 # systemctl start xrdp-sesman.service
 
-# echo "▶️  STEP 6.4: Enabling GNOME for user sip..."
-# systemctl enable gnome-headless@sip.service
-# systemctl start gnome-headless@sip.service
+ echo "▶️  STEP 6.4: Enabling GNOME for user sip..."
+ systemctl enable gnome-headless@sip.service
+ systemctl start gnome-headless@sip.service
 
-# =======================================================================
-# COMPLETION
-# =======================================================================
-
-echo ""
-echo "🎉 GNOME SETUP COMPLETED!"
-echo ""
-echo "📋 Setup Summary:"
-echo "   👤 User: sip"
-echo "   🔑 Password: sip"
-echo "   🖥️  Desktop: Ubuntu GNOME"
-echo "   🌐 RDP Port: 3389"
-echo "   🖼️  Resolution: 1920x1080"
-echo ""
-echo "🔗 To connect, use RDP client:"
-echo "   IP: [container IP address]"
-echo "   Port: 3389"
-echo "   User: sip"
-echo "   Password: sip"
-echo ""
-echo "📊 Status check:"
-echo "   systemctl status gnome-headless@sip"
-echo "   systemctl status xrdp"
-echo "   journalctl -u gnome-headless@sip -f"
-echo ""
-echo "✨ Ready to use!"
-echo ""
-echo "🖥️  Desktop Environment: Ubuntu GNOME"
-echo "🎨 Theme: Yaru (default Ubuntu theme)"
-echo "🔧 Additional tools: GNOME Tweaks, Calculator, System Monitor"
 
 # =======================================================================
 # ROCm PACKAGES INSTALLATION - ADDED FOR GPU SUPPORT
@@ -456,121 +297,6 @@ echo "🔧 Additional tools: GNOME Tweaks, Calculator, System Monitor"
 echo "🔧 STEP 1.8: Installing ROCm packages for GPU support..."
 apt install -y rocm-smi rocminfo libamdhip64-5 mesa-vulkan-drivers
 
-echo "📋 ROCm packages installed successfully"
-echo "   - rocm-smi: ROCm System Management Interface"
-echo "   - rocminfo: ROCm info tool"
-echo "   - libamdhip64-5: AMD HIP runtime"
-echo "   - mesa-vulkan-drivers: Vulkan drivers for Mesa"
-
-# =======================================================================
-# VAAPI & VULKAN ENVIRONMENT SETUP
-# =======================================================================
-#echo "🔧 STEP 1.8.1: Setting up complete GUI desktop environment variables..."
-
-# Add comprehensive environment variables to system profile
-# cat >> /etc/environment << 'ENV_EOF'
-# ============================================================================
-# GPU & GRAPHICS DRIVERS
-# ============================================================================
-# VAAPI (Video Acceleration API) settings for AMD GPU
-# LIBVA_DRIVER_NAME=radeonsi
-# VDPAU_DRIVER=radeonsi
-
-# Vulkan settings for AMD GPU
-# VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/radeon_icd.x86_64.json
-# VK_DRIVER_FILES=/usr/share/vulkan/icd.d/radeon_icd.x86_64.json
-# AMD_VK_PIPELINE_CACHE_FILENAME=steamapp_shader_cache
-# AMD_VK_USE_PIPELINE_CACHE=1
-# ENABLE_VK_LAYER_VALVE_steam_fossilize_1=1
-# ENABLE_VK_LAYER_VALVE_steam_overlay_1=1
-
-# Mesa/OpenGL для AMD
-# MESA_GL_VERSION_OVERRIDE=4.6
-# MESA_GLSL_VERSION_OVERRIDE=460
-# MESA_DRI_DRIVER=radeonsi
-
-# Headless setup
-# SDL_VIDEODRIVER=x11
-
-
-# ============================================================================
-# DISPLAY & DESKTOP ENVIRONMENT
-# ============================================================================
-# X11 settings
-# DISPLAY=:0
-# XAUTHORITY=/home/sip/.Xauthority
-
-
-# Wayland settings (fallback)
-# WAYLAND_DISPLAY=wayland-0
-# GDK_BACKEND=x11,wayland
-
-# GNOME Desktop settings
-# GNOME_SESSION=gnome
-# GDMSESSION=gnome
-# DESKTOP_SESSION=gnome
-# XDG_SESSION_TYPE=x11
-# XDG_SESSION_DESKTOP=gnome
-# XDG_CURRENT_DESKTOP=GNOME
-
-# ============================================================================
-# GTK & QT SETTINGS
-# ============================================================================
-# GTK settings
-# GTK_THEME=Adwaita
-# GTK_MODULES=gail:atk-bridge
-
-# Qt5 settings
-# QT_QPA_PLATFORM=xcb
-# QT_QPA_PLATFORMTHEME=gtk3
-# QT_AUTO_SCREEN_SCALE_FACTOR=1
-# QT_SCALE_FACTOR=1
-
-# ============================================================================
-# DBUS & SYSTEMD
-# ============================================================================
-# D-Bus settings
-# DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus
-
-# Systemd user settings
-# XDG_RUNTIME_DIR=/run/user/1000
-
-# ============================================================================
-# LOCALE & LANGUAGE
-# ============================================================================
-# Language settings
-# LANG=en_US.UTF-8
-# LANGUAGE=en_US:en
-# LC_ALL=en_US.UTF-8
-
-# ============================================================================
-# APPLICATION SETTINGS
-# ============================================================================
-# Firefox GPU acceleration
-# MOZ_USE_XINPUT2=1
-# MOZ_X11_EGL=1
-
-# Chrome/Chromium GPU settings
-# CHROME_GPU_SANDBOX=0
-# CHROME_GPU=1
-
-# Steam settings (if installed)
-# STEAM_RUNTIME=1
-# TEAM_FRAME_RATE=0
-
-
-#ENV_EOF
-
-echo "📋 Complete GUI desktop environment variables configured successfully"
-echo "   ✅ VAAPI: LIBVA_DRIVER_NAME=radeonsi, VDPAU_DRIVER=radeonsi"
-echo "   ✅ Vulkan: VK_ICD_FILENAMES, VK_DRIVER_FILES set for AMD GPU"
-echo "   ✅ Display: DISPLAY=:0, XAUTHORITY configured"
-echo "   ✅ GNOME: XDG_SESSION_DESKTOP=GNOME, GDMSESSION=gnome"
-echo "   ✅ GTK/Qt: GTK_THEME=Adwaita, QT_QPA_PLATFORM=xcb"
-echo "   ✅ D-Bus: DBUS_SESSION_BUS_ADDRESS configured"
-echo "   ✅ Runtime: XDG_RUNTIME_DIR=/run/user/1000"
-echo "   ✅ GPU Debug: RADV_DEBUG=all, RADV_PERFTEST=all"
-echo "   ✅ Browser GPU: MOZ_X11_EGL=1, CHROME_GPU=1"
 
 # =======================================================================
 # AMD GPU MONITORING - AMDGPU_TOP INSTALLATION
@@ -656,6 +382,7 @@ echo ""
 echo "📋 AMD GPU monitoring tools installed successfully!"
 echo "🔍 Usage: amdgpu_top"
 echo "✅ Setup complete!"
+
 
 # =======================================================================
 # NOMACHINE REMOTE DESKTOP INSTALLATION
@@ -787,39 +514,3 @@ log " - Cleaning up..."
 rm -rf "$TMPDIR"
 
 log " - NoMachine installed successfully."
-
-echo "📋 Administrator privileges configured successfully"
-echo "   - User sip added to sudo, video, render groups for GPU access"
-echo "   - Passwordless sudo access configured"
-echo "   - User can now run: sudo <command> without password"
-
-echo ""
-echo "⚠️  IMPORTANT: After installation, restart the container for GPU access to work properly"
-echo "   Command: pct stop 456 && pct start 456"
-echo "   Or from Proxmox web interface: Stop → Start container"
-echo ""
-echo "🔍 After restart, you can use:"
-echo "   amdgpu_top          # Interactive GPU monitoring"
-echo "   amdgpu_top --json   # JSON output for scripts"
-echo "   rocminfo            # GPU information"
-echo "   vainfo              # VAAPI video acceleration info"
-echo "   vulkaninfo          # Vulkan API information"
-echo ""
-echo "🎉 UBUNTU GNOME SETUP COMPLETED SUCCESSFULLY!"
-echo ""
-echo "📋 Final Summary:"
-echo "   🖥️  Desktop Environment: Ubuntu GNOME"
-echo "   👤 User: sip (password: sip)"
-echo "   🌐 RDP Access: Port 3389"
-echo "   🎨 Theme: Yaru (default Ubuntu)"
-echo "   🌐 Browser: Firefox"
-echo "   🔧 GPU Support: ROCm + amdgpu_top + VAAPI + Vulkan"
-echo "   🎬 Video Acceleration: VAAPI (H.264, HEVC, VP9, AV1)"
-echo "   🎮 Vulkan API: Version 1.3.x (RADV driver)"
-echo ""
-echo "🔧 To start using:"
-echo "   1. Restart container: pct stop <CTID> && pct start <CTID>"
-echo "   2. Connect via RDP: [container IP]:3389"
-echo "   3. Login: sip / sip"
-echo ""
-echo "✨ Setup complete! Enjoy your Ubuntu GNOME desktop!"
