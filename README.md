@@ -98,4 +98,13 @@ amdgpu_top
 ```
 
 
+https://www.conroyp.com/articles/running-ollama-ubuntu-unsupported-amd-gpu-performance-guide
+https://github.com/Umio-Yasuno/amdgpu_top
 
+https://www.reddit.com/r/Proxmox/comments/oj6ai5/guide_lxc_gpu_accelerated_gaming_desktop_without/?tl=ru
+
+https://c-nergy.be/blog/?p=20236
+
+https://wiki.calculate-linux.org/ru/ccg
+
+https://github.com/selkies-project/docker-selkies-glx-desktop/tree/main
