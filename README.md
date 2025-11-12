@@ -26,7 +26,7 @@ dev0: /dev/fuse,gid=0,mode=0660               # FUSE for user filesystems
 dev1: /dev/kvm,gid=10,mode=0666               # KVM for hardware virtualization
 dev2: /dev/dri/card1,gid=44,mode=0660         # GPU device for rendering/output
 dev3: /dev/dri/renderD128,gid=993,mode=0660   # DRM render device
-dev4: /dev/kfd,gid=993,mode=0660              # ROCm compute/GPU task queue
+dev4: /dev/kfd,gid=992,mode=0660              # ROCm compute/GPU task queue
 dev5: /dev/net/tun,gid=0,mode=0660            # TUN interface (VPN, etc.)
 dev6: /dev/tty,gid=4,mode=0660                # Access to PTS/TTY
 dev7: /dev/tty0,gid=5,mode=0660               # TTY0 — main terminal
