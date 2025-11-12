@@ -1,25 +1,19 @@
-# =======================================================================
-# SETUP LXC PLASMA SCRIPT - VERSION 1.3 (KDE PLASMA 5.27 DESKTOP)
-# Status: KDE Plasma 5.27 Desktop with full GPU support (ROCm + VAAPI + Vulkan) and remote access
-# Compatible with Ubuntu 24.04 LTS
-# =======================================================================
-# =======================================================================
 #!/bin/bash
 
 # =======================================================================
 #
-# This script automates the complete setup of a KDE Plasma 5.27 GUI environment in an existing LXC container.
-# It installs KDE Plasma 5.27 Desktop, SDDM display manager, XRDP for RDP access,
+# This script automates the complete setup of a KDE Plasma GUI environment in an existing LXC container.
+# It installs KDE Plasma Desktop, SDDM display manager, XRDP for RDP access,
 # Full AMD GPU support (ROCm, VAAPI, Vulkan), and configures all necessary services.
 #
 # Requirements:
-# - Ubuntu 24.04 LTS
+# - Ubuntu 25.04
 # - Unprivileged LXC container
 # - Internet connection for package downloads
 #
-# Result: Fully functional KDE Plasma 5.27 desktop with remote access capabilities
+# Result: Fully functional KDE Plasma desktop with remote access capabilities
 #
-# SCRIPT FOR SETTING UP KDE PLASMA 5.27 GUI IN EXISTING LXC CONTAINER
+# SCRIPT FOR SETTING UP KDE PLASMA GUI IN EXISTING LXC CONTAINER
 # =======================================================================
 
 set -e  # Stop script on error
@@ -51,7 +45,11 @@ apt install -y \
     xorg-docs-core \
     xorg-sgml-doctools
 
-echo "🔗 STEP 1.3: Installing XRDP packages..."
+echo "🔧 STEP 1.3: Installing GPU support packages..."
+apt install -y rocm-smi rocminfo libamdhip64-5 mesa-vulkan-drivers
+
+
+echo "🔗 STEP 1.4: Installing XRDP packages..."
 apt install -y \
     xrdp \
     xorgxrdp \
@@ -59,64 +57,18 @@ apt install -y \
     pipewire-module-xrdp \
     python3-xkit
 
-echo "🖥️  STEP 1.4: Installing KDE Plasma Desktop..."
+
+echo "🖥️  STEP 1.5: Installing KDE Plasma Desktop..."
 # Using Ubuntu 24.04 default repositories with KDE Plasma 5.27
 #apt install -y plasma-desktop plasma-nm plasma-pa kde-plasma-desktop
 apt install -y plasma-desktop plasma-nm plasma-pa kde-plasma-desktop
 
-
-#echo "🔧 STEP 1.5: Installing KDE Plasma additional software..."
-
 echo "🔧 STEP 1.6: Installing additional packages..."
 apt install -y \
-    apt-utils \
-    dbus-user-session \
-    fakeroot \
-    kmod \
-    locales \
-    ssl-cert \
-    sudo \
-    udev \
-    tzdata \
-    dbus-x11 \
-    zenity \
-    snapd \
-    flatpak \
-    appstream \
-    qemu-guest-agent \
-    mesa-utils \
-    vulkan-tools \
-    inxi \
-    vainfo \
-    libva2 \
-    mesa-va-drivers \
-    vdpauinfo \
-    libva-drm2 \
-    glmark2 \
-    hardinfo \
-    htop \
-    iotop \
-    ncdu \
-    tree \
-    curl \
-    wget \
-    git \
-    rsync \
-    zip \
-    unzip \
-    p7zip-full \
-    nano \
-    python3 \
-    python3-pip \
-    python3-setuptools \
-    python3-dev \
-    curl \
-    wget \
-    hplip \
-    mpg123 \
-    ffmpeg \
-    x264 \
-    x265
+    chromium \
+    radeontop \
+    vlc \
+    libreoffice-calc
 
 # =======================================================================
 # ROCm PACKAGES INSTALLATION - ADDED FOR GPU SUPPORT
@@ -133,31 +85,6 @@ apt install -y rocm-smi rocminfo libamdhip64-5 mesa-vulkan-drivers
 # locale-gen en_US.UTF-8
 # update-locale LANG=en_US.UTF-8
 
-# Configure NetworkManager for proper network connectivity detection
-echo "🌐 STEP 1.6.3: Configuring NetworkManager for Discover..."
-# Stop systemd-networkd and let NetworkManager manage interfaces
-systemctl stop systemd-networkd systemd-networkd.socket || true
-systemctl disable systemd-networkd systemd-networkd.socket || true
-# Remove systemd-networkd configuration
-rm -f /etc/systemd/network/eth0.network
-# Configure NetworkManager to manage all devices
-sed -i 's/managed=false/managed=true/' /etc/NetworkManager/NetworkManager.conf
-echo -e '\n[keyfile]\nunmanaged-devices=none' >> /etc/NetworkManager/NetworkManager.conf
-# Restart NetworkManager
-systemctl restart NetworkManager
-
-
-# NOTE: Steam installation is commented out for now
-#echo "🎮 STEP 1.6: Installing Steam dependencies..."
-# Enable i386 architecture for Steam
-dpkg --add-architecture i386
-apt update
-# Install Steam runtime and 32-bit dependencies
-apt install -y libc6-i386 libcurl4:i386 libglib2.0-0:i386 libgtk2.0-0:i386 libgtk-3-0:i386
-apt install -y libasound2:i386 libvulkan1:i386 mesa-vulkan-drivers:i386 libgl1:i386 libgl1-mesa-dri:i386
-apt install -y libxcursor1:i386 libxi6:i386 libxtst6:i386 libdbus-1-3:i386 libnspr4:i386 libnss3:i386
-apt install -y libpulse0:i386 pulseaudio-module-bluetooth:i386 libxinerama1:i386 libgdk-pixbuf-2.0-0:i386 libcairo2:i386 libpango-1.0-0:i386 libatk1.0-0:i386 libfreetype6:i386 libfontconfig1:i386 zlib1g:i386 libpng16-16:i386
-apt install -y steam-devices
 
 # =======================================================================
 # STEP 2: USER CONFIGURATION
@@ -183,13 +110,11 @@ else
     echo "ℹ️  Sudo configuration already exists for $user"
 fi
 
-
-
 # =======================================================================
-# STEP 3: CREATING CUSTOM SYSTEMD UNITS
+# STEP 3: CREATING CUSTOM SYSTEMD UNITS HOST DISPLAY
 # =======================================================================
 
-echo "🔧 STEP 3.1: Creating Xorg Headless service..."
+# echo "🔧 STEP 3.1: Creating Xorg Headless service..."
 cat > /etc/systemd/system/xorg-headless.service << 'XORG_EOF'
 [Unit]
 Description=Headless Xorg on VT7
@@ -228,7 +153,7 @@ Type=simple
 User=%i
 Group=%i
 PAMName=login
-# Environment variables for KDE Plasma 5.27
+# Environment variables for KDE Plasma
 Environment=DISPLAY=:0
 Environment=DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus
 Environment=QT_QPA_PLATFORM=xcb
@@ -291,86 +216,30 @@ Section "ServerLayout"
 EndSection
 XORG_CONF_EOF
 
-#sed -i 's|param=xrdp/xorg.conf|param=/etc/X11/xorg.conf.d/10-headless-amdgpu.conf|' /etc/xrdp/sesman.ini
+# =======================================================================
+# STEP 4.1: CREATING XRDP IGPU CONFIGURATION
+# =======================================================================
+echo "🔧 STEP 4.1: Creating Xorg configuration for XRDP..."
+sed -i '/^Section "Device"$/,/^EndSection$/c\
+Section "Device"\
+    Identifier "Video Card (xrdpdev)"\
+    Driver "xrdpdev"\
+    Option "DRMDevice" "/dev/dri/renderD128"\
+    Option "DRI3" "1"\
+    Option "DRMAllowList" "amdgpu"\
+    Option "AccelMethod" "glamor"\
+    Option "TearFree" "true"\
+EndSection' /etc/X11/xrdp/xorg.conf
 
 
 # =======================================================================
 # COMPLETION
 # =======================================================================
 
-
-
-# =======================================================================
-# VAAPI & VULKAN ENVIRONMENT SETUP
-# =======================================================================
-echo "🔧 STEP 1.8.1: Setting up complete GUI desktop environment variables..."
-
-# # Add comprehensive environment variables to system profile
-# # Create environment variables in /etc/environment
-# cat >> /etc/environment << 'ENV_EOF'
+echo "🔧 STEP 5.1: Setting up complete GUI desktop environment variables..."
 # ## ============================================================================
 # ## GPU & GRAPHICS DRIVERS - AMD Radeon
 # ## ============================================================================
-# ## VAAPI (Video Acceleration API) settings for AMD GPU
-# LIBVA_DRIVER_NAME=radeonsi
-# VDPAU_DRIVER=radeonsi
-#
-# ## Vulkan settings for AMD GPU
-# VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/radeon_icd.x86_64.json
-# VK_DRIVER_FILES=/usr/share/vulkan/icd.d/radeon_icd.x86_64.json
-# AMD_VK_USE_PIPELINE_CACHE=1
-#
-# ## Mesa/OpenGL for AMD
-# MESA_GL_VERSION_OVERRIDE=4.6
-# MESA_GLSL_VERSION_OVERRIDE=460
-# MESA_DRI_DRIVER=radeonsi
-#
-# ## Headless X11 setup
-# SDL_VIDEODRIVER=x11
-#
-#
-# ## ============================================================================
-# ## DISPLAY & DESKTOP ENVIRONMENT
-# ## ============================================================================
-# ## X11 settings for headless operation
-# DISPLAY=:0
-# XAUTHORITY=/home/sip/.Xauthority
-#
-# ## KDE Plasma Desktop settings
-# DESKTOP_SESSION=plasma
-# KDE_FULL_SESSION=true
-# XDG_SESSION_TYPE=x11
-# XDG_SESSION_DESKTOP=KDE
-# XDG_CURRENT_DESKTOP=KDE
-#
-# ## Qt5 settings for KDE Plasma 5.27
-# QT_QPA_PLATFORM=xcb
-# QT_QPA_PLATFORMTHEME=KDE
-# QT_STYLE_OVERRIDE=Breeze
-# QT_X11_NO_MITSHM=1
-#
-# ## KDE specific settings
-# KDEDIRS=/usr
-# KDE_SESSION_VERSION=5
-# KDE_FULL_SESSION=true
-#
-# ## Locale settings (Russian)
-# LANG=ru_RU.UTF-8
-# LC_ALL=ru_RU.UTF-8
-# LANGUAGE=ru_RU:ru
-#
-# ## ============================================================================
-# ## STEAM & GAMING
-# ## ============================================================================
-# ## Steam settings for AMD GPU
-# STEAM_RUNTIME=1
-# STEAM_FRAME_RATE=0
-# PROTON_USE_WINED3D=1
-# PROTON_NO_ESYNC=1
-# PROTON_NO_FSYNC=1
-#
-# ENV_EOF
-
 
 ## Additional environment variables for KDE Plasma and GPU support
 ## This ensures variables are available for all users
@@ -380,13 +249,6 @@ export VK_ICD_FILENAMES="/usr/share/vulkan/icd.d/radeon_icd.x86_64.json"
 export VK_DRIVER_FILES="/usr/share/vulkan/icd.d/radeon_icd.x86_64.json"
 export AMD_VK_USE_PIPELINE_CACHE=1
 
-# Steam specific variables
-# export STEAM_RUNTIME=1
-# export STEAM_FRAME_RATE=0
-# export PROTON_USE_WINED3D=1
-# export PROTON_NO_ESYNC=1
-# export PROTON_NO_FSYNC=1
-
 export LIBVA_DRIVER_NAME=radeonsi
 export VDPAU_DRIVER=radeonsi
 
@@ -394,9 +256,6 @@ export VDPAU_DRIVER=radeonsi
 export MESA_GL_VERSION_OVERRIDE=4.6
 export MESA_GLSL_VERSION_OVERRIDE=460
 export MESA_DRI_DRIVER=radeonsi
-
-## Headless X11 setup
-#export SDL_VIDEODRIVER=x11
 
 ## ============================================================================
 ## DISPLAY & DESKTOP ENVIRONMENT
@@ -422,167 +281,182 @@ export KDEDIRS=/usr
 export KDE_SESSION_VERSION=5
 
 ## Locale settings (Russian)
-export LANG=ru_RU.UTF-8
-export LC_ALL=ru_RU.UTF-8
-export LANGUAGE=ru_RU:ru
+#export LANG=ru_RU.UTF-8
+#export LC_ALL=ru_RU.UTF-8
+#export LANGUAGE=ru_RU:ru
 
 
 # =======================================================================
 # STEP 6: CONFIGURING AND STARTING SERVICES
 # =======================================================================
 
-echo "⚙️  STEP 6.1: Reloading systemd..."
-systemctl daemon-reload
+#echo "⚙️  STEP 6.1: Reloading systemd..."
+#systemctl daemon-reload
 
-echo "▶️  STEP 6.2: Enabling and starting services..."
-systemctl enable xorg-headless.service
-# systemctl enable xrdp.service
-# systemctl enable xrdp-sesman.service
+# echo "▶️  STEP 6.2: Enabling and starting services..."
+# systemctl enable xorg-headless.service
+# systemctl start xorg-headless.service
 
-# echo "▶️  STEP 6.3: Starting services..."
-systemctl start xorg-headless.service
-# systemctl start xrdp.service
-# systemctl start xrdp-sesman.service
-
-echo "▶️  STEP 6.4: Enabling KDE Plasma for user sip..."
-systemctl enable plasma-headless@$user.service
-systemctl start plasma-headless@$user.service
+# echo "▶️  STEP 6.4: Enabling KDE Plasma for user sip..."
+# systemctl enable plasma-headless@$user.service
+# systemctl start plasma-headless@$user.service
 
 # =======================================================================
 # NOMACHINE REMOTE DESKTOP INSTALLATION
 # =======================================================================
-echo "🔧 STEP 1.8.2: Installing NoMachine remote desktop server..."
+# echo "🔧 STEP 1.8.2: Installing NoMachine remote desktop server..."
 
-# Advanced NoMachine installer (downloads latest .deb for current architecture)
-# Resilient to redirects/cookies and provides detailed logs.
+# # Advanced NoMachine installer (downloads latest .deb for current architecture)
+# # Resilient to redirects/cookies and provides detailed logs.
 
-ARCH="$(dpkg --print-architecture)"    # amd64 / arm64 etc.
-UA='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Safari/537.36'
-ACCEPT_LANG='en;q=0.9,ru;q=0.8'
-TMPDIR="$(mktemp -d -t nomx-XXXXXX)"
-CJ="$TMPDIR/cookies.txt"
-PRIMARY_URL="https://www.nomachine.com/download/download&id=1"
-ALT_URL="https://download.nomachine.com/download/?id=1&platform=linux"
-TS="$(date +%s)" # cache-bust
+# ARCH="$(dpkg --print-architecture)"    # amd64 / arm64 etc.
+# UA='Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Safari/537.36'
+# ACCEPT_LANG='en;q=0.9,ru;q=0.8'
+# TMPDIR="$(mktemp -d -t nomx-XXXXXX)"
+# CJ="$TMPDIR/cookies.txt"
+# PRIMARY_URL="https://www.nomachine.com/download/download&id=1"
+# ALT_URL="https://download.nomachine.com/download/?id=1&platform=linux"
+# TS="$(date +%s)" # cache-bust
 
-# Ensure curl/ca-certificates are available
-if ! command -v curl >/dev/null 2>&1; then
-  apt-get update -y >/dev/null 2>&1
-  apt-get install -y curl ca-certificates >/dev/null 2>&1
-fi
+# # Ensure curl/ca-certificates are available
+# if ! command -v curl >/dev/null 2>&1; then
+#   apt-get update -y >/dev/null 2>&1
+#   apt-get install -y curl ca-certificates >/dev/null 2>&1
+# fi
 
-log() { echo "$@"; }
+# log() { echo "$@"; }
 
-fetch_html () {
-  local url="$1"
-  log "   -> GET $url"
-  # Separate cookie jar for each run; limit redirects; set headers
-  curl -fsSL \
-    --max-redirs 20 \
-    -A "$UA" \
-    -H "Accept-Language: $ACCEPT_LANG" \
-    -e "https://www.nomachine.com/download" \
-    -c "$CJ" -b "$CJ" \
-    -m 30 \
-    "$url"
-}
+# fetch_html () {
+#   local url="$1"
+#   log "   -> GET $url"
+#   # Separate cookie jar for each run; limit redirects; set headers
+#   curl -fsSL \
+#     --max-redirs 20 \
+#     -A "$UA" \
+#     -H "Accept-Language: $ACCEPT_LANG" \
+#     -e "https://www.nomachine.com/download" \
+#     -c "$CJ" -b "$CJ" \
+#     -m 30 \
+#     "$url"
+# }
 
-parse_link_id() {
-  # Search specifically for <a id="link_download" href="...deb">
-  sed -n 's/.*id="link_download" href="\([^"]*\.deb\)".*/\1/p' | head -n1
-}
+# parse_link_id() {
+#   # Search specifically for <a id="link_download" href="...deb">
+#   sed -n 's/.*id="link_download" href="\([^"]*\.deb\)".*/\1/p' | head -n1
+# }
 
-parse_link_arch() {
-  # Fallback: any link to nomachine_*_ARCH.deb
-  sed -n "s|.*href=\"\\([^\"]*nomachine_[^\"]*_${ARCH}\\.deb\\)\".*|\\1|p" | head -n1
-}
+# parse_link_arch() {
+#   # Fallback: any link to nomachine_*_ARCH.deb
+#   sed -n "s|.*href=\"\\([^\"]*nomachine_[^\"]*_${ARCH}\\.deb\\)\".*|\\1|p" | head -n1
+# }
 
-follow_meta_refresh() {
-  sed -n 's/.*http-equiv="refresh".*url=\([^"]*\)".*/\1/p' | head -n1
-}
+# follow_meta_refresh() {
+#   sed -n 's/.*http-equiv="refresh".*url=\([^"]*\)".*/\1/p' | head -n1
+# }
 
-log " - Fetching latest NoMachine .deb link..."
-DL_URL=""
+# log " - Fetching latest NoMachine .deb link..."
+# DL_URL=""
 
-# 1) Primary URL with cache-bust
-HTML="$(fetch_html "${PRIMARY_URL}&_ts=${TS}" 2>/dev/null || true)"
-if [[ -z "${HTML:-}" ]]; then
-  log "   ! Primary returned empty. Trying ALT..."
-else
-  DL_URL="$(printf '%s\n' "$HTML" | parse_link_id 2>/dev/null || true)"
-  [[ -n "$DL_URL" ]] && log "   -> Parsed via id=link_download (primary)"
-fi
+# # 1) Primary URL with cache-bust
+# HTML="$(fetch_html "${PRIMARY_URL}&_ts=${TS}" 2>/dev/null || true)"
+# if [[ -z "${HTML:-}" ]]; then
+#   log "   ! Primary returned empty. Trying ALT..."
+# else
+#   DL_URL="$(printf '%s\n' "$HTML" | parse_link_id 2>/dev/null || true)"
+#   [[ -n "$DL_URL" ]] && log "   -> Parsed via id=link_download (primary)"
+# fi
 
-# 2) If not found - try meta refresh on primary
-if [[ -z "$DL_URL" && -n "${HTML:-}" ]]; then
-  META_URL="$(printf '%s\n' "$HTML" | follow_meta_refresh 2>/dev/null || true)"
-  if [[ -n "$META_URL" ]]; then
-    log "   -> Following meta refresh (primary): $META_URL"
-    HTML2="$(fetch_html "${META_URL}&_ts=${TS}" 2>/dev/null || true)"
-    if [[ -n "${HTML2:-}" ]]; then
-      DL_URL="$(printf '%s\n' "$HTML2" | parse_link_id 2>/dev/null || true)"
-      [[ -n "$DL_URL" ]] && log "   -> Parsed via id=link_download (meta)"
-      [[ -z "$DL_URL" ]] && DL_URL="$(printf '%s\n' "$HTML2" | parse_link_arch 2>/dev/null || true)"
-      [[ -n "$DL_URL" ]] && log "   -> Parsed via *_${ARCH}.deb (meta)"
-    fi
-  fi
-fi
+# # 2) If not found - try meta refresh on primary
+# if [[ -z "$DL_URL" && -n "${HTML:-}" ]]; then
+#   META_URL="$(printf '%s\n' "$HTML" | follow_meta_refresh 2>/dev/null || true)"
+#   if [[ -n "$META_URL" ]]; then
+#     log "   -> Following meta refresh (primary): $META_URL"
+#     HTML2="$(fetch_html "${META_URL}&_ts=${TS}" 2>/dev/null || true)"
+#     if [[ -n "${HTML2:-}" ]]; then
+#       DL_URL="$(printf '%s\n' "$HTML2" | parse_link_id 2>/dev/null || true)"
+#       [[ -n "$DL_URL" ]] && log "   -> Parsed via id=link_download (meta)"
+#       [[ -z "$DL_URL" ]] && DL_URL="$(printf '%s\n' "$HTML2" | parse_link_arch 2>/dev/null || true)"
+#       [[ -n "$DL_URL" ]] && log "   -> Parsed via *_${ARCH}.deb (meta)"
+#     fi
+#   fi
+# fi
 
-# 3) If still empty - try ALT URL
-if [[ -z "$DL_URL" ]]; then
-  HTML_ALT="$(fetch_html "${ALT_URL}&_ts=${TS}" 2>/dev/null || true)"
-  if [[ -n "${HTML_ALT:-}" ]]; then
-    DL_URL="$(printf '%s\n' "$HTML_ALT" | parse_link_id 2>/dev/null || true)"
-    [[ -n "$DL_URL" ]] && log "   -> Parsed via id=link_download (alt)"
-    if [[ -z "$DL_URL" ]]; then
-      log "   ! Fallback on ALT: search for *_${ARCH}.deb"
-      DL_URL="$(printf '%s\n' "$HTML_ALT" | parse_link_arch 2>/dev/null || true)"
-    fi
-  fi
-fi
+# # 3) If still empty - try ALT URL
+# if [[ -z "$DL_URL" ]]; then
+#   HTML_ALT="$(fetch_html "${ALT_URL}&_ts=${TS}" 2>/dev/null || true)"
+#   if [[ -n "${HTML_ALT:-}" ]]; then
+#     DL_URL="$(printf '%s\n' "$HTML_ALT" | parse_link_id 2>/dev/null || true)"
+#     [[ -n "$DL_URL" ]] && log "   -> Parsed via id=link_download (alt)"
+#     if [[ -z "$DL_URL" ]]; then
+#       log "   ! Fallback on ALT: search for *_${ARCH}.deb"
+#       DL_URL="$(printf '%s\n' "$HTML_ALT" | parse_link_arch 2>/dev/null || true)"
+#     fi
+#   fi
+# fi
 
-# 4) Final validation
-if [[ -z "$DL_URL" ]]; then
-  log " ! ERROR: could not parse a .deb URL for arch: ${ARCH}"
-  log "   Tip: check network connectivity and site availability"
-  rm -rf "$TMPDIR"
-  exit 1
-fi
+# # 4) Final validation
+# if [[ -z "$DL_URL" ]]; then
+#   log " ! ERROR: could not parse a .deb URL for arch: ${ARCH}"
+#   log "   Tip: check network connectivity and site availability"
+#   rm -rf "$TMPDIR"
+#   exit 1
+# fi
 
-# 5) If id-link gave wrong arch - filter it
-if ! [[ "$DL_URL" =~ _${ARCH}\.deb$ ]]; then
-  log "   ! Parsed URL arch mismatch; searching for matching *_${ARCH}.deb..."
-  CANDIDATE="$(printf '%s\n' "${HTML:-}${HTML2:-}${HTML_ALT:-}" | parse_link_arch 2>/dev/null || true)"
-  if [[ -n "$CANDIDATE" ]]; then
-    DL_URL="$CANDIDATE"
-    log "   -> Using: $DL_URL"
-  fi
-fi
+# # 5) If id-link gave wrong arch - filter it
+# if ! [[ "$DL_URL" =~ _${ARCH}\.deb$ ]]; then
+#   log "   ! Parsed URL arch mismatch; searching for matching *_${ARCH}.deb..."
+#   CANDIDATE="$(printf '%s\n' "${HTML:-}${HTML2:-}${HTML_ALT:-}" | parse_link_arch 2>/dev/null || true)"
+#   if [[ -n "$CANDIDATE" ]]; then
+#     DL_URL="$CANDIDATE"
+#     log "   -> Using: $DL_URL"
+#   fi
+# fi
 
-log " - Found: $DL_URL"
-PKG="$TMPDIR/$(basename "$DL_URL")"
+# log " - Found: $DL_URL"
+# PKG="$TMPDIR/$(basename "$DL_URL")"
 
-log " - Downloading package..."
-curl -fSL --max-redirs 20 -A "$UA" -H "Accept-Language: $ACCEPT_LANG" -c "$CJ" -b "$CJ" -m 180 -o "$PKG" "$DL_URL"
+# log " - Downloading package..."
+# curl -fSL --max-redirs 20 -A "$UA" -H "Accept-Language: $ACCEPT_LANG" -c "$CJ" -b "$CJ" -m 180 -o "$PKG" "$DL_URL"
 
-# 6) Installation
-if ! dpkg -i "$PKG"; then
-  log " - dpkg failed, resolving dependencies..."
-  apt-get update -y >/dev/null 2>&1
-  apt-get -f install -y >/dev/null 2>&1
-  # Retry if needed
-  dpkg -i "$PKG" 2>/dev/null || true
-fi
+# # 6) Installation
+# if ! dpkg -i "$PKG"; then
+#   log " - dpkg failed, resolving dependencies..."
+#   apt-get update -y >/dev/null 2>&1
+#   apt-get -f install -y >/dev/null 2>&1
+#   # Retry if needed
+#   dpkg -i "$PKG" 2>/dev/null || true
+# fi
 
-log " - Cleaning up..."
-rm -rf "$TMPDIR"
+# log " - Cleaning up..."
+# rm -rf "$TMPDIR"
 
-log " - NoMachine installed successfully."
+# log " - NoMachine installed successfully."
 
 # =======================================================================
 # CONFIGURING KDE PLASMA 5.27 DESKTOP ENVIRONMENT
 # =======================================================================
-echo "🔧 STEP 1.8.3: Configuring KDE Plasma 5.27 desktop environment..."
+
+# Configure NetworkManager for proper network connectivity detection
+echo "🌐 STEP 1.7: Configuring NetworkManager for Discover..."
+# Stop systemd-networkd and let NetworkManager manage interfaces
+systemctl stop systemd-networkd systemd-networkd.socket || true
+systemctl disable systemd-networkd systemd-networkd.socket || true
+# Remove systemd-networkd configuration
+rm -f /etc/systemd/network/eth0.network
+# Configure NetworkManager to manage all devices
+sed -i 's/managed=false/managed=true/' /etc/NetworkManager/NetworkManager.conf
+echo -e '\n[keyfile]\nunmanaged-devices=none' >> /etc/NetworkManager/NetworkManager.conf
+
+# Fix NetworkManager authorization issues in LXC
+echo "🔧 STEP 1.8: Fixing NetworkManager authorization issues..."
+sed -i '/\[main\]/a auth-polkit=false' /etc/NetworkManager/NetworkManager.conf
+echo "✅ NetworkManager authorization fixed (auth-polkit=false)"
+
+# Restart NetworkManager
+systemctl restart NetworkManager
+
+
+echo "🔧 STEP 5.3: Configuring KDE Plasma 5.27 desktop environment..."
 
       cat > /etc/polkit-1/rules.d/50-plasma-lxc-soft.rules <<EOF
 // Soft permissions for KDE Plasma in unprivileged LXC (ES5-compatible).
@@ -728,27 +602,18 @@ EOL
       su - $user -c "kwriteconfig5 --file ~/.config/kwinrc --group Compositing --key Enabled true"
       su - $user -c "kwriteconfig5 --file ~/.config/kwinrc --group Plugins --key wobblywindowsEnabled true"
 
-      # echo "Cleaning container"
-      # su - $user -c "
-      #   sudo apt purge -y bluez pulseaudio-module-bluetooth;
-      #   sudo apt purge -y powerdevil upower;
-      #   sudo systemctl daemon-reload;
-      #   sudo systemctl enable sddm;
-      #   sudo apt -y autoremove
-      #"
-
-      echo "Uninstall fwupd"
+      echo "Cleaning container"
       su - $user -c "
-        sudo systemctl disable --now fwupd.service;
-        sudo apt -y remove fwupd plasma-discover-backend-fwupd"
+           sudo apt purge -y bluez pulseaudio-module-bluetooth;
+           sudo apt purge -y powerdevil upower;
+           sudo systemctl daemon-reload;
+           sudo systemctl enable sddm;
+           sudo apt -y autoremove"
 
-      echo "Disable baloo indexer by default (performance tweak)"
-      su - $user -c "
-        balooctl disable"
 
       echo "Uninstalling khelpcenter"
       su - $user -c "
-        sudo apt purge -y khelpcenter"
+           sudo apt purge -y khelpcenter"
 
       echo "Rebooting"
       su - $user -c "sudo reboot now"
