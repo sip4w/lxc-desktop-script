@@ -51,6 +51,66 @@ lxc.prlimit.stack: unlimited                  # No limit on process stack size; 
 
 > Note: inside the container, user `sip` is added to `video` and `render` groups which match the passed GPU devices.
 
+## Checking GID Configuration for Unprivileged Containers
+
+For unprivileged LXC containers, you must use **host GIDs** (not mapped values) in device configuration. Here are commands to verify correct GIDs:
+
+### Quick GID Check
+```bash
+# Show all required groups and their GIDs on the host
+getent group kvm video render tty | awk -F: '{printf "%-15s GID=%s\n", $1, $3}'
+
+# Check GID of specific devices
+stat -c "%g" /dev/kvm
+stat -c "%g" /dev/dri/card0
+stat -c "%g" /dev/kfd
+```
+
+### Verify Device GIDs
+```bash
+# Show device ownership and groups
+ls -l /dev/kvm /dev/dri/* /dev/kfd 2>/dev/null
+
+# Detailed device information
+stat -c "%n: owner=%U:%G (gid=%g)" /dev/kvm
+stat -c "%n: owner=%U:%G (gid=%g)" /dev/dri/card0
+stat -c "%n: owner=%U:%G (gid=%g)" /dev/kfd
+```
+
+### Check Container Configuration
+```bash
+# Show device settings in container config
+pct config <VMID> | grep "^dev"
+# or
+cat /etc/pve/lxc/<VMID>.conf | grep "^dev"
+
+# Compare GIDs in config with host GIDs
+VMID=456  # Replace with your container ID
+echo "=== GIDs in container $VMID config ==="
+grep "^dev" /etc/pve/lxc/$VMID.conf | grep -oP 'gid=\K[0-9]+'
+echo ""
+echo "=== GIDs on host ==="
+getent group kvm video render tty | awk -F: '{printf "%s: %s\n", $1, $3}'
+```
+
+### Check Inside Container
+```bash
+# Check groups inside container
+pct exec <VMID> -- getent group video render kvm
+
+# Verify device access
+pct exec <VMID> -- ls -l /dev/kvm /dev/dri/card0
+pct exec <VMID> -- test -r /dev/kvm && echo "KVM available" || echo "KVM unavailable"
+```
+
+### Standard GID Reference
+- **kvm**: Usually GID=103 (check with `getent group kvm`)
+- **video**: Usually GID=44 (check with `getent group video`)
+- **render**: Usually GID=104 (check with `getent group render`)
+- **tty**: Usually GID=5 (check with `getent group tty`)
+
+> **Important**: GIDs may differ on different systems. Always verify on your host using `getent group` before configuring containers.
+
 ## Notes
 - The script targets AMD GPUs (ROCm). If no GPU is available, Xorg may fail with the `amdgpu` driver. In that case, use the dummy/vesa driver or configure device passthrough properly.
 - The hint `pct stop 456 && pct start 456` is an example; use your actual container ID.
